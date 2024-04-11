@@ -910,6 +910,8 @@ EOF
                     "password":"${UUID[12]}"
                 }
             ],
+            "up_mbps": 500,
+            "down_mbps": 30,
             "ignore_client_bandwidth":false,
             "tls":{
                 "enabled":true,
