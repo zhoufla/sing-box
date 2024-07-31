@@ -1165,7 +1165,7 @@ EOF
         {
             "type":"direct",
             "tag":"direct",
-            "domain_strategy":"$DOMAIN_STRATEG"
+            "domain_strategy":"prefer_ipv4"
         },
         {
             "type":"direct",
