@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# 脚本更新日期 2024.04.01
+# 脚本更新日期 2024.10.28
 WORK_DIR=/sing-box
 PORT=$START_PORT
 SUBSCRIBE_TEMPLATE="https://raw.githubusercontent.com/fscarmen/client_template/main"
@@ -17,7 +17,7 @@ check_arch() {
       SING_BOX_ARCH=arm64; JQ_ARCH=arm64; QRENCODE_ARCH=arm64; ARGO_ARCH=arm64
       ;;
     amd64 )
-      [[ "$(awk -F ':' '/flags/{print $2; exit}' /proc/cpuinfo)" =~ avx2 ]] && SING_BOX_ARCH=amd64v3 || SING_BOX_ARCH=amd64
+      SING_BOX_ARCH=amd64
       JQ_ARCH=amd64; QRENCODE_ARCH=amd64; ARGO_ARCH=amd64
       ;;
     armv7 )
@@ -36,7 +36,8 @@ check_latest_sing-box() {
 install() {
   # 下载 sing-box
   echo "正在下载 sing-box ..."
-  local ONLINE=$(check_latest_sing-box)
+  #####local ONLINE=$(check_latest_sing-box)
+  local ONLINE='1.11.0-alpha.6'
   wget https://github.com/SagerNet/sing-box/releases/download/v$ONLINE/sing-box-$ONLINE-linux-$SING_BOX_ARCH.tar.gz -O- | tar xz -C $WORK_DIR sing-box-$ONLINE-linux-$SING_BOX_ARCH/sing-box && mv $WORK_DIR/sing-box-$ONLINE-linux-$SING_BOX_ARCH/sing-box $WORK_DIR/sing-box && rm -rf $WORK_DIR/sing-box-$ONLINE-linux-$SING_BOX_ARCH
 
   # 下载 jq
@@ -692,7 +693,8 @@ stdout_logfile=/dev/null
       #include /etc/nginx/conf.d/*.conf;
 
     server {
-      listen 127.0.0.1:$START_PORT ssl http2; # sing-box backend
+      listen 127.0.0.1:$START_PORT ssl ; # sing-box backend
+      http2 on;
       server_name addons.mozilla.org;
 
       ssl_certificate            $WORK_DIR/cert/cert.pem;
@@ -702,7 +704,7 @@ stdout_logfile=/dev/null
       ssl_stapling               off;
       ssl_stapling_verify        off;"
 
-  [ "${VMESS_WS}" = 'true' ] && NGINX_CONF+="
+  [ "${VLESS_WS}" = 'true' ] && NGINX_CONF+="
       # 反代 sing-box vless websocket
       location /${UUID}-vless {
         if (\$http_upgrade != "websocket") {
@@ -718,7 +720,7 @@ stdout_logfile=/dev/null
         proxy_redirect                      off;
       }"
 
-  [ "${VLESS_WS}" = 'true' ] && NGINX_CONF+="
+  [ "${VMESS_WS}" = 'true' ] && NGINX_CONF+="
       # 反代 sing-box websocket
       location /${UUID}-vmess {
         if (\$http_upgrade != "websocket") {
@@ -789,7 +791,7 @@ stdout_logfile=/dev/null
   local CLASH_SUBSCRIBE+="
   $CLASH_TROJAN
 "
-  [ "${VMESS_WS}" = 'true' ] && local CLASH_VMESS_WS="- {name: \"${NODE_NAME} vmess-ws\", type: vmess, server: ${CDN}, port: 80, uuid: ${UUID}, udp: true, tls: false, alterId: 0, cipher: none, skip-cert-verify: true, network: ws, ws-opts: { path: \"/${UUID}-vmess\", headers: {Host: ${ARGO_DOMAIN}} }, smux: { enabled: true, protocol: 'h2mux', padding: true, max-connections: '8', min-streams: '16', statistic: true, only-tcp: false } }" &&
+  [ "${VMESS_WS}" = 'true' ] && local CLASH_VMESS_WS="- {name: \"${NODE_NAME} vmess-ws\", type: vmess, server: ${CDN}, port: 80, uuid: ${UUID}, udp: true, tls: false, alterId: 0, cipher: auto, skip-cert-verify: true, network: ws, ws-opts: { path: \"/${UUID}-vmess\", headers: {Host: ${ARGO_DOMAIN}} }, smux: { enabled: true, protocol: 'h2mux', padding: true, max-connections: '8', min-streams: '16', statistic: true, only-tcp: false } }" &&
   local CLASH_SUBSCRIBE+="
   $CLASH_VMESS_WS
 "
@@ -831,7 +833,7 @@ trojan://${UUID}@${SERVER_IP_1}:$PORT_TROJAN?allowInsecure=1#${NODE_NAME}%20troj
 "
   [ "${VMESS_WS}" = 'true' ] && local SHADOWROCKET_SUBSCRIBE+="
 ----------------------------
-vmess://$(echo -n "none:${UUID}@${CDN}:80" | base64 -w0)?remarks=${NODE_NAME}%20vmess-ws&obfsParam=${ARGO_DOMAIN}&path=/${UUID}-vmess&obfs=websocket&alterId=0
+vmess://$(echo -n "auto:${UUID}@${CDN}:80" | base64 -w0)?remarks=${NODE_NAME}%20vmess-ws&obfsParam=${ARGO_DOMAIN}&path=/${UUID}-vmess&obfs=websocket&alterId=0
 "
   [ "${VLESS_WS}" = 'true' ] && local SHADOWROCKET_SUBSCRIBE+="
 ----------------------------
@@ -927,7 +929,7 @@ trojan://${UUID}@${SERVER_IP_1}:$PORT_TROJAN?security=tls&type=tcp&headerType=no
 
   [ "${VMESS_WS}" = 'true' ] && local V2RAYN_SUBSCRIBE+="
 ----------------------------
-vmess://$(echo -n "{ \"v\": \"2\", \"ps\": \"${NODE_NAME} vmess-ws\", \"add\": \"${CDN}\", \"port\": \"80\", \"id\": \"${UUID}\", \"aid\": \"0\", \"scy\": \"none\", \"net\": \"ws\", \"type\": \"none\", \"host\": \"${ARGO_DOMAIN}\", \"path\": \"/${UUID}-vmess\", \"tls\": \"\", \"sni\": \"\", \"alpn\": \"\" }" | base64 -w0)
+vmess://$(echo -n "{ \"v\": \"2\", \"ps\": \"${NODE_NAME} vmess-ws\", \"add\": \"${CDN}\", \"port\": \"80\", \"id\": \"${UUID}\", \"aid\": \"0\", \"scy\": \"auto\", \"net\": \"ws\", \"type\": \"none\", \"host\": \"${ARGO_DOMAIN}\", \"path\": \"/${UUID}-vmess\", \"tls\": \"\", \"sni\": \"\", \"alpn\": \"\" }" | base64 -w0)
 "
 
   [ "${VLESS_WS}" = 'true' ] && local V2RAYN_SUBSCRIBE+="
@@ -974,12 +976,12 @@ trojan://${UUID}@${SERVER_IP_1}:$PORT_TROJAN?security=tls&allowInsecure=1&fp=ran
 
   [ "${VMESS_WS}" = 'true' ] && local NEKOBOX_SUBSCRIBE+="
 ----------------------------
-vmess://$(echo -n "{\"add\":\"${CDN}\",\"aid\":\"0\",\"host\":\"${ARGO_DOMAIN}\",\"id\":\"${UUID}\",\"net\":\"ws\",\"path\":\"/${UUID}-vmess\",\"port\":\"80\",\"ps\":\"${NODE_NAME} vmess-ws\",\"scy\":\"none\",\"sni\":\"\",\"tls\":\"\",\"type\":\"\",\"v\":\"2\"}" | base64 -w0)
+vmess://$(echo -n "{\"add\":\"${CDN}\",\"aid\":\"0\",\"host\":\"${ARGO_DOMAIN}\",\"id\":\"${UUID}\",\"net\":\"ws\",\"path\":\"/${UUID}-vmess\",\"port\":\"80\",\"ps\":\"${NODE_NAME} vmess-ws\",\"scy\":\"auto\",\"sni\":\"\",\"tls\":\"\",\"type\":\"\",\"v\":\"2\"}" | base64 -w0)
 "
 
   [ "${VLESS_WS}" = 'true' ] && local NEKOBOX_SUBSCRIBE+="
 ----------------------------
-vless://${UUID}@${CDN}:443?security=tls&sni=${ARGO_DOMAIN}&type=ws&path=/${UUID}-vless?ed%3D2048&host=${ARGO_DOMAIN}&encryption=none#${NODE_NAME}%20vless-ws-tls
+vless://${UUID}@${CDN}:443?security=tls&sni=${ARGO_DOMAIN}&type=ws&path=/${UUID}-vless?ed%3D2048&host=${ARGO_DOMAIN}#${NODE_NAME}%20vless-ws-tls
 "
 
   [ "${H2_REALITY}" = 'true' ] && local NEKOBOX_SUBSCRIBE+="
@@ -1018,10 +1020,10 @@ vless://${UUID}@${SERVER_IP_1}:${PORT_GRPC_REALITY}?security=reality&sni=addons.
   local NODE_REPLACE+="\"${NODE_NAME} trojan\","
 
   [ "${VMESS_WS}" = 'true' ] &&
-  local INBOUND_REPLACE+=" { \"type\": \"vmess\", \"tag\": \"${NODE_NAME} vmess-ws\", \"server\":\"${CDN}\", \"server_port\":80, \"uuid\":\"${UUID}\", \"transport\": { \"type\":\"ws\", \"path\":\"/${UUID}-vmess\", \"headers\": { \"Host\": \"${ARGO_DOMAIN}\" } }, \"multiplex\": { \"enabled\":true, \"protocol\":\"h2mux\", \"max_streams\":16, \"padding\": true, \"brutal\":{ \"enabled\":true, \"up_mbps\":1000, \"down_mbps\":1000 } } }," && local NODE_REPLACE+="\"${NODE_NAME} vmess-ws\","
+  local INBOUND_REPLACE+=" { \"type\": \"vmess\", \"tag\": \"${NODE_NAME} vmess-ws\", \"server\":\"${CDN}\", \"server_port\":80, \"uuid\": \"${UUID}\", \"security\": \"auto\", \"transport\": { \"type\":\"ws\", \"path\":\"/${UUID}-vmess\", \"headers\": { \"Host\": \"${ARGO_DOMAIN}\" } }, \"multiplex\": { \"enabled\":true, \"protocol\":\"h2mux\", \"max_streams\":16, \"padding\": true, \"brutal\":{ \"enabled\":true, \"up_mbps\":1000, \"down_mbps\":1000 } } }," && local NODE_REPLACE+="\"${NODE_NAME} vmess-ws\","
 
   [ "${VLESS_WS}" = 'true' ] &&
-  local INBOUND_REPLACE+=" { \"type\": \"vless\", \"tag\": \"${NODE_NAME} vless-ws-tls\", \"server\":\"${CDN}\", \"server_port\":443, \"uuid\":\"${UUID}\", \"tls\": { \"enabled\":true, \"server_name\":\"${ARGO_DOMAIN}\", \"utls\": { \"enabled\":true, \"fingerprint\":\"chrome\" } }, \"transport\": { \"type\":\"ws\", \"path\":\"/${UUID}-vless\", \"headers\": { \"Host\": \"${ARGO_DOMAIN}\" }, \"max_early_data\":2048, \"early_data_header_name\":\"Sec-WebSocket-Protocol\" }, \"multiplex\": { \"enabled\":true, \"protocol\":\"h2mux\", \"max_streams\":16, \"padding\": true, \"brutal\":{ \"enabled\":true, \"up_mbps\":1000, \"down_mbps\":1000 } } }," &&
+  local INBOUND_REPLACE+=" { \"type\": \"vless\", \"tag\": \"${NODE_NAME} vless-ws-tls\", \"server\":\"${CDN}\", \"server_port\":443, \"uuid\": \"${UUID}\", \"tls\": { \"enabled\":true, \"server_name\":\"${ARGO_DOMAIN}\", \"utls\": { \"enabled\":true, \"fingerprint\":\"chrome\" } }, \"transport\": { \"type\":\"ws\", \"path\":\"/${UUID}-vless\", \"headers\": { \"Host\": \"${ARGO_DOMAIN}\" }, \"max_early_data\":2048, \"early_data_header_name\":\"Sec-WebSocket-Protocol\" }, \"multiplex\": { \"enabled\":true, \"protocol\":\"h2mux\", \"max_streams\":16, \"padding\": true, \"brutal\":{ \"enabled\":true, \"up_mbps\":1000, \"down_mbps\":1000 } } }," &&
   local NODE_REPLACE+="\"${NODE_NAME} vless-ws-tls\","
 
   [ "${H2_REALITY}" = 'true' ] &&
@@ -1154,7 +1156,8 @@ $($WORK_DIR/qrencode https://${ARGO_DOMAIN}/${UUID}/auto)
 
 # Sing-box 的最新版本
 update_sing-box() {
-  local ONLINE=$(check_latest_sing-box)
+  #####local ONLINE=$(check_latest_sing-box)
+  local ONLINE='1.11.0-alpha.6'
   local LOCAL=$($WORK_DIR/sing-box version | awk '/version/{print $NF}')
   if [ -n "$ONLINE" ]; then
     if [[ "$ONLINE" != "$LOCAL" ]]; then
